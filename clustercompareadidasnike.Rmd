@@ -1,0 +1,92 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+
+print("Problem: Nike and Adidas are rivals in the shoe market and while Nike spends heavily on advertising for market share, Adidas picks their materials in such a way that their products are more affordable. Both their shoes are of comparable quality.")
+
+print("This project analyses various features of their products, prices, discounts, clusters them and identifies how Nike can acquire more market share from Adidas.")
+
+library(tidyverse)
+library(cluster)
+library(factoextra)
+library(ggplot2)
+
+# Read the dataset
+product_data <- read.csv('Adidas Vs Nike2.csv')
+
+# Data preprocessing
+# Filter for Nike and Adidas only and clean up the 'Brand' column
+product_data <- product_data %>% 
+  mutate(Brand = case_when(
+    grepl('Nike', Brand) ~ 'Nike',
+    grepl('Adidas', Brand) ~ 'Adidas',
+    TRUE ~ as.character(Brand)
+  )) %>% 
+  filter(Brand %in% c('Nike', 'Adidas'))
+
+# Selecting the relevant columns: Discount and Rating
+data_for_clustering <- product_data %>% 
+  select(Discount, Rating) %>% 
+  na.omit() # Remove missing values
+
+# Check for zero variance
+zero_variance <- apply(data_for_clustering, 2, var) == 0
+if (any(zero_variance)) {
+  data_for_clustering <- data_for_clustering[, !zero_variance]
+}
+
+# Scale the features
+# Check for NA values before scaling
+if (any(is.na(data_for_clustering))) {
+  stop("NA values found in the data. Please handle them before scaling.")
+}
+
+data_for_clustering_scaled <- scale(data_for_clustering)
+
+# Check for NA, NaN, Inf values after scaling
+if (any(is.na(data_for_clustering_scaled), na.rm = TRUE) | 
+    any(is.nan(data_for_clustering_scaled), na.rm = TRUE) | 
+    any(is.infinite(data_for_clustering_scaled), na.rm = TRUE)) {
+  stop("NA/NaN/Inf values found after scaling. Please check and handle them before proceeding.")
+}
+
+# Determining the optimal number of clusters using the elbow method
+set.seed(123) # Setting a seed for reproducibility
+wss <- map_dbl(1:10, function(k) kmeans(data_for_clustering_scaled, centers = k, nstart = 25)$tot.withinss)
+
+# Elbow plot
+elbow_plot <- qplot(1:10, wss, geom = "line") +
+  labs(x = "Number of clusters k", y = "Total within-clusters sum of squares") +
+  theme_minimal()
+
+# Print the elbow plot to choose the optimal number of clusters
+print(elbow_plot)
+
+# Assuming the optimal number of clusters is 3 based on the elbow plot
+optimal_k <- 3
+km <- kmeans(data_for_clustering_scaled, centers = optimal_k, nstart = 25)
+
+# Adding cluster assignments to the data
+product_data$Cluster <- as.factor(km$cluster)
+
+# Visualization of clusters
+cluster_plot <- ggplot(product_data, aes(x = Discount, y = Rating, color = Brand, shape = Cluster)) +
+  geom_point(alpha = 0.6) +
+  scale_color_manual(values = c("Nike" = "blue", "Adidas" = "red")) +
+  labs(title = "Cluster Analysis on Discount vs. Rating",
+       x = "Discount",
+       y = "Rating") +
+  theme_minimal()
+
+print(cluster_plot)
+
+print("Conclusion:")
+
+cat("Thus, we see that there are a lot of highly-rated shoes from Nike that outcompete Adidas.
+However, Nike has a policy of not offering discounts on these shoes (at the time of preparing this dataset).
+Hence, for Nike to acquire more market share, it must sell some of its highly-rated shoes on a discount, and hold it till it captures that portion of the market share from Adidas.")
+```
+
